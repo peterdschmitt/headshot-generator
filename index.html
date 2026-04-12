@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Headshot Generator</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; }
+
+  .header { background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 24px 32px; border-bottom: 1px solid #2a2a4a; }
+  .header h1 { font-size: 24px; font-weight: 600; color: #fff; }
+  .header p { font-size: 14px; color: #888; margin-top: 4px; }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px; display: grid; grid-template-columns: 380px 1fr; gap: 32px; }
+
+  /* Left Panel */
+  .panel { background: #1a1a1a; border-radius: 12px; border: 1px solid #2a2a2a; padding: 24px; }
+  .panel h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #fff; }
+
+  /* Upload Area */
+  .upload-area { border: 2px dashed #333; border-radius: 8px; padding: 32px; text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 24px; position: relative; overflow: hidden; }
+  .upload-area:hover, .upload-area.dragover { border-color: #4a6cf7; background: rgba(74, 108, 247, 0.05); }
+  .upload-area.has-image { padding: 0; border-style: solid; border-color: #4a6cf7; }
+  .upload-area img { width: 100%; border-radius: 6px; display: block; }
+  .upload-icon { font-size: 48px; margin-bottom: 12px; }
+  .upload-text { font-size: 14px; color: #888; }
+  .upload-text strong { color: #4a6cf7; }
+  input[type="file"] { display: none; }
+
+  /* API Key */
+  .api-key-section { margin-bottom: 24px; }
+  .api-key-section label { font-size: 13px; font-weight: 500; color: #aaa; display: block; margin-bottom: 6px; }
+  .api-key-input { width: 100%; padding: 10px 12px; background: #111; border: 1px solid #333; border-radius: 6px; color: #fff; font-size: 14px; font-family: monospace; }
+  .api-key-input:focus { outline: none; border-color: #4a6cf7; }
+
+  /* Presets */
+  .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 24px; }
+  .preset-btn { padding: 10px 12px; background: #222; border: 1px solid #333; border-radius: 8px; color: #ccc; font-size: 13px; cursor: pointer; transition: all 0.2s; text-align: left; }
+  .preset-btn:hover { border-color: #4a6cf7; color: #fff; }
+  .preset-btn.active { background: rgba(74, 108, 247, 0.15); border-color: #4a6cf7; color: #4a6cf7; }
+  .preset-btn .preset-icon { font-size: 18px; display: block; margin-bottom: 4px; }
+  .preset-btn .preset-name { font-weight: 500; }
+
+  /* Custom Prompt */
+  .prompt-section { margin-bottom: 24px; }
+  .prompt-section label { font-size: 13px; font-weight: 500; color: #aaa; display: block; margin-bottom: 6px; }
+  textarea { width: 100%; padding: 12px; background: #111; border: 1px solid #333; border-radius: 6px; color: #fff; font-size: 14px; resize: vertical; min-height: 80px; font-family: inherit; }
+  textarea:focus { outline: none; border-color: #4a6cf7; }
+
+  /* Settings */
+  .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+  .setting { }
+  .setting label { font-size: 12px; font-weight: 500; color: #888; display: block; margin-bottom: 4px; }
+  .setting select { width: 100%; padding: 8px 10px; background: #111; border: 1px solid #333; border-radius: 6px; color: #fff; font-size: 13px; }
+  .setting select:focus { outline: none; border-color: #4a6cf7; }
+
+  /* Generate Button */
+  .generate-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #4a6cf7, #6366f1); border: none; border-radius: 8px; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+  .generate-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(74, 108, 247, 0.4); }
+  .generate-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* Right Panel - Output */
+  .output-panel { }
+  .output-panel h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #fff; }
+
+  .output-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .output-card { background: #1a1a1a; border-radius: 12px; border: 1px solid #2a2a2a; overflow: hidden; }
+  .output-card img, .output-card video { width: 100%; display: block; }
+  .output-card .output-info { padding: 12px 16px; }
+  .output-card .output-label { font-size: 13px; color: #888; }
+  .output-card .output-prompt { font-size: 12px; color: #555; margin-top: 4px; }
+  .output-card .output-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .output-card .output-actions a { padding: 6px 12px; background: #222; border: 1px solid #333; border-radius: 6px; color: #aaa; font-size: 12px; text-decoration: none; cursor: pointer; }
+  .output-card .output-actions a:hover { border-color: #4a6cf7; color: #fff; }
+
+  /* Status */
+  .status { padding: 16px; background: #111; border-radius: 8px; border: 1px solid #2a2a2a; margin-bottom: 16px; display: none; }
+  .status.visible { display: block; }
+  .status .status-text { font-size: 14px; color: #aaa; }
+  .status .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #333; border-top-color: #4a6cf7; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state { text-align: center; padding: 80px 32px; color: #555; }
+  .empty-state .empty-icon { font-size: 64px; margin-bottom: 16px; }
+  .empty-state p { font-size: 14px; }
+
+  /* Debug Log */
+  .debug-log { margin-top: 16px; background: #0a0a0a; border: 1px solid #222; border-radius: 8px; padding: 12px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 11px; color: #888; display: none; }
+  .debug-log.visible { display: block; }
+  .debug-log .log-entry { margin-bottom: 4px; }
+  .debug-log .log-label { color: #4a6cf7; }
+  .debug-log .log-error { color: #ef4444; }
+  .debug-log .log-success { color: #22c55e; }
+
+  /* Animate Video Button */
+  .animate-btn { padding: 6px 12px; background: linear-gradient(135deg, #7c3aed, #6366f1); border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; }
+  .animate-btn:hover { opacity: 0.9; }
+
+  @media (max-width: 800px) {
+    .container { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Headshot Generator</h1>
+  <p>Upload your photo, pick a scene, and generate yourself anywhere</p>
+</div>
+
+<div class="container">
+  <!-- Left Panel: Controls -->
+  <div>
+    <div class="panel">
+      <h2>1. Your Photo</h2>
+      <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+        <div id="uploadPlaceholder">
+          <div class="upload-icon">📷</div>
+          <div class="upload-text">Click or drag &amp; drop your headshot<br><strong>JPG, PNG</strong> — any size</div>
+        </div>
+        <input type="file" id="fileInput" accept="image/*">
+      </div>
+
+      <div class="api-key-section">
+        <label>fal.ai API Key</label>
+        <input type="password" class="api-key-input" id="apiKey" placeholder="Enter your fal.ai API key">
+      </div>
+
+      <h2>2. Pick a Scene</h2>
+      <div class="presets">
+        <button class="preset-btn" data-preset="ted" onclick="selectPreset(this)">
+          <span class="preset-icon">🎤</span>
+          <span class="preset-name">TED Talk</span>
+        </button>
+        <button class="preset-btn" data-preset="podcast" onclick="selectPreset(this)">
+          <span class="preset-icon">🎙️</span>
+          <span class="preset-name">Podcast</span>
+        </button>
+        <button class="preset-btn" data-preset="linkedin" onclick="selectPreset(this)">
+          <span class="preset-icon">💼</span>
+          <span class="preset-name">LinkedIn</span>
+        </button>
+        <button class="preset-btn" data-preset="conference" onclick="selectPreset(this)">
+          <span class="preset-icon">🏛️</span>
+          <span class="preset-name">Conference</span>
+        </button>
+        <button class="preset-btn" data-preset="outdoor" onclick="selectPreset(this)">
+          <span class="preset-icon">🌿</span>
+          <span class="preset-name">Outdoor</span>
+        </button>
+        <button class="preset-btn" data-preset="studio" onclick="selectPreset(this)">
+          <span class="preset-icon">📸</span>
+          <span class="preset-name">Studio</span>
+        </button>
+        <button class="preset-btn" data-preset="custom" onclick="selectPreset(this)">
+          <span class="preset-icon">✏️</span>
+          <span class="preset-name">Custom</span>
+        </button>
+        <button class="preset-btn" data-preset="video" onclick="selectPreset(this)">
+          <span class="preset-icon">🎬</span>
+          <span class="preset-name">Video Clip</span>
+        </button>
+      </div>
+
+      <div class="prompt-section">
+        <label>Prompt <span style="color:#555">(auto-filled from preset, or write your own)</span></label>
+        <textarea id="promptInput" placeholder="Describe the scene you want..."></textarea>
+      </div>
+
+      <h2>3. Settings</h2>
+      <div class="settings">
+        <div class="setting">
+          <label>Model</label>
+          <select id="modelSelect">
+            <option value="fal-ai/nano-banana-pro" selected>Nano Banana Pro (highest quality)</option>
+            <option value="fal-ai/nano-banana-2">Nano Banana 2 (fast)</option>
+            <option value="fal-ai/hy-wu-edit">HY-WU Edit (pose changes)</option>
+          </select>
+        </div>
+        <div class="setting">
+          <label>Aspect Ratio</label>
+          <select id="aspectRatio">
+            <option value="auto">Auto</option>
+            <option value="16:9">16:9 (Landscape)</option>
+            <option value="9:16">9:16 (Portrait)</option>
+            <option value="1:1">1:1 (Square)</option>
+            <option value="4:5">4:5 (Portrait)</option>
+            <option value="3:4">3:4 (Portrait)</option>
+          </select>
+        </div>
+        <div class="setting">
+          <label>Quality</label>
+          <select id="resolution">
+            <option value="1K">1K (Standard)</option>
+            <option value="2K" selected>2K (High)</option>
+            <option value="4K">4K (Ultra)</option>
+          </select>
+        </div>
+        <div class="setting">
+          <label>Variations</label>
+          <select id="numImages">
+            <option value="1">1 image</option>
+            <option value="2">2 images</option>
+            <option value="3">3 images</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="generate-btn" id="generateBtn" onclick="generate()">Generate</button>
+    </div>
+  </div>
+
+  <!-- Right Panel: Output -->
+  <div class="output-panel">
+    <h2>Output</h2>
+    <div class="status" id="status">
+      <span class="spinner"></span>
+      <span class="status-text" id="statusText">Generating...</span>
+    </div>
+    <div class="debug-log" id="debugLog"></div>
+    <div id="outputGrid" class="output-grid">
+      <div class="empty-state">
+        <div class="empty-icon">🖼️</div>
+        <p>Your generated images will appear here.<br>Upload a photo and pick a scene to get started.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// State
+let uploadedImageUrl = null;
+let uploadedFileData = null;
+let outputs = [];
+
+// Preset prompts
+// Nano Banana Pro /edit: prompts describe what to CHANGE about the uploaded photo
+// HY-WU Edit: prompts describe the full scene (less reliable for face preservation)
+const PRESETS = {
+  ted: {
+    prompt: "Place this person on a round red TED stage. Add large red TED letters in the background, dramatic spotlight from above, a red circular carpet on the floor, and audience silhouettes in the foreground. Make it look like they are mid-speech, gesturing confidently. Cinematic photorealistic lighting.",
+    aspect: "16:9",
+    model: "fal-ai/nano-banana-pro"
+  },
+  podcast: {
+    prompt: "Place this person in a professional podcast studio. Add a professional microphone on a boom arm in front of them, headphones around their neck, acoustic foam panels on the walls behind them, and warm studio lighting. They should look engaged, as if mid-conversation.",
+    aspect: "auto",
+    model: "fal-ai/nano-banana-pro"
+  },
+  linkedin: {
+    prompt: "Transform this into a polished LinkedIn professional headshot. Change the background to a modern office with soft, diffused lighting. Add shallow depth of field. Keep the person's face and expression exactly the same but make the lighting more flattering and professional.",
+    aspect: "1:1",
+    model: "fal-ai/nano-banana-pro"
+  },
+  conference: {
+    prompt: "Place this person at a podium on a professional conference stage. Add a large presentation screen behind them, dramatic stage lighting, and an audience visible in the foreground. They should appear confident, mid-speech.",
+    aspect: "16:9",
+    model: "fal-ai/nano-banana-pro"
+  },
+  outdoor: {
+    prompt: "Move this person outdoors to a beautiful park setting. Change the lighting to warm golden hour sunlight. Add blurred greenery and trees in the background. Keep their face exactly the same. Lifestyle photography style.",
+    aspect: "4:5",
+    model: "fal-ai/nano-banana-pro"
+  },
+  studio: {
+    prompt: "Transform this into a dramatic studio portrait. Change the lighting to Rembrandt-style dramatic side lighting. Replace the background with a dark, moody studio backdrop. Keep sharp focus on the face. Fine art portrait style.",
+    aspect: "3:4",
+    model: "fal-ai/nano-banana-pro"
+  },
+  custom: {
+    prompt: "",
+    aspect: "auto",
+    model: "fal-ai/nano-banana-pro"
+  },
+  video: {
+    prompt: "Place this person on a TED stage with dramatic spotlight and audience silhouettes. They should appear to be mid-speech, gesturing naturally. Cinematic photorealistic lighting.",
+    aspect: "16:9",
+    model: "fal-ai/nano-banana-pro"
+  }
+};
+
+// Handle a file (from input or drag-and-drop)
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const img = document.createElement('img');
+    img.src = ev.target.result;
+    const area = document.getElementById('uploadArea');
+    area.innerHTML = '';
+    area.appendChild(img);
+    area.classList.add('has-image');
+    area.onclick = () => document.getElementById('fileInput').click();
+
+    // Store for upload
+    uploadedFileData = file;
+    uploadedImageUrl = null;
+  };
+  reader.readAsDataURL(file);
+}
+
+// File input handling
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  handleFile(e.target.files[0]);
+});
+
+// Drag and drop handling
+const uploadArea = document.getElementById('uploadArea');
+
+uploadArea.addEventListener('dragenter', function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  this.classList.add('dragover');
+});
+
+uploadArea.addEventListener('dragover', function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  this.classList.add('dragover');
+});
+
+uploadArea.addEventListener('dragleave', function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  this.classList.remove('dragover');
+});
+
+uploadArea.addEventListener('drop', function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  this.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  handleFile(file);
+});
+
+// Also support dropping anywhere on the page
+document.body.addEventListener('dragover', function(e) { e.preventDefault(); });
+document.body.addEventListener('drop', function(e) {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) handleFile(file);
+});
+
+// Preset selection
+function selectPreset(btn) {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const preset = PRESETS[btn.dataset.preset];
+  document.getElementById('promptInput').value = preset.prompt;
+  document.getElementById('modelSelect').value = preset.model;
+
+  // Set aspect ratio
+  const ar = document.getElementById('aspectRatio');
+  for (let opt of ar.options) {
+    if (opt.value === preset.aspect) { ar.value = preset.aspect; break; }
+  }
+}
+
+// Upload image to fal.ai storage
+async function uploadToFal(file, apiKey) {
+  updateStatus('Uploading your photo to fal.ai...');
+
+  // Step 1: Get upload URL
+  const initRes = await fetch('https://rest.alpha.fal.ai/storage/upload/initiate', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Key ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      file_name: file.name || 'headshot.jpg',
+      content_type: file.type || 'image/jpeg'
+    })
+  });
+
+  if (!initRes.ok) throw new Error(`Upload init failed: ${initRes.status}`);
+  const { file_url, upload_url } = await initRes.json();
+
+  // Step 2: Upload the file
+  const arrayBuf = await file.arrayBuffer();
+  const uploadRes = await fetch(upload_url, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'image/jpeg' },
+    body: arrayBuf
+  });
+
+  if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
+  return file_url;
+}
+
+// Submit to fal.ai queue
+async function submitToQueue(modelId, payload, apiKey) {
+  const res = await fetch(`https://queue.fal.run/${modelId}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Key ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Submit failed (${res.status}): ${err}`);
+  }
+  return res.json();
+}
+
+// Poll for status
+async function pollStatus(statusUrl, apiKey) {
+  while (true) {
+    const res = await fetch(`${statusUrl}?logs=1`, {
+      headers: { 'Authorization': `Key ${apiKey}` }
+    });
+    const data = await res.json();
+
+    if (data.status === 'COMPLETED') return data;
+    if (data.status === 'FAILED' || data.error) throw new Error(data.error || 'Generation failed');
+
+    const pos = data.queue_position != null ? ` (position: ${data.queue_position})` : '';
+    updateStatus(`Status: ${data.status}${pos}...`);
+
+    await new Promise(r => setTimeout(r, 3000));
+  }
+}
+
+// Get result
+async function getResult(responseUrl, apiKey) {
+  const res = await fetch(responseUrl, {
+    headers: { 'Authorization': `Key ${apiKey}` }
+  });
+  return res.json();
+}
+
+// Update status UI
+function updateStatus(text, show = true) {
+  const el = document.getElementById('status');
+  document.getElementById('statusText').textContent = text;
+  el.classList.toggle('visible', show);
+}
+
+// Debug logging
+function debugLog(label, message, type = '') {
+  const log = document.getElementById('debugLog');
+  log.classList.add('visible');
+  const cls = type === 'error' ? 'log-error' : type === 'success' ? 'log-success' : '';
+  log.innerHTML += `<div class="log-entry"><span class="log-label">[${label}]</span> <span class="${cls}">${message}</span></div>`;
+  log.scrollTop = log.scrollHeight;
+}
+
+function clearDebugLog() {
+  const log = document.getElementById('debugLog');
+  log.innerHTML = '';
+  log.classList.remove('visible');
+}
+
+// Add output card
+function addOutputCard(imageUrl, prompt, width, height, isVideo = false) {
+  const grid = document.getElementById('outputGrid');
+
+  // Remove empty state
+  const empty = grid.querySelector('.empty-state');
+  if (empty) empty.remove();
+
+  const card = document.createElement('div');
+  card.className = 'output-card';
+
+  const media = isVideo
+    ? `<video src="${imageUrl}" controls autoplay loop style="width:100%"></video>`
+    : `<img src="${imageUrl}" alt="Generated">`;
+
+  const dims = width && height ? `${width}x${height}` : '';
+
+  card.innerHTML = `
+    ${media}
+    <div class="output-info">
+      <div class="output-label">${dims}</div>
+      <div class="output-prompt">${prompt.substring(0, 120)}...</div>
+      <div class="output-actions">
+        <a href="${imageUrl}" download target="_blank">Download</a>
+        <a onclick="navigator.clipboard.writeText('${imageUrl}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy URL',1500)">Copy URL</a>
+        ${!isVideo ? `<button class="animate-btn" onclick="animateImage('${imageUrl}')">Animate to Video</button>` : ''}
+      </div>
+    </div>
+  `;
+
+  grid.prepend(card);
+}
+
+// Animate an image to video
+async function animateImage(imageUrl) {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { alert('Enter your fal.ai API key first'); return; }
+
+  const motionPrompt = prompt('Describe the motion (e.g., "person speaking and gesturing naturally, slight head movements"):');
+  if (!motionPrompt) return;
+
+  try {
+    updateStatus('Submitting video generation... (this takes 3-5 minutes)');
+    document.getElementById('generateBtn').disabled = true;
+
+    const payload = {
+      prompt: motionPrompt,
+      image_url: imageUrl,
+      duration: "5",
+      aspect_ratio: "16:9"
+    };
+
+    const queue = await submitToQueue('fal-ai/kling-video/v2/master/image-to-video', payload, apiKey);
+    updateStatus('Video generating... this takes 3-5 minutes, hang tight!');
+
+    await pollStatus(queue.status_url, apiKey);
+    const result = await getResult(queue.response_url, apiKey);
+
+    if (result.video && result.video.url) {
+      addOutputCard(result.video.url, motionPrompt, null, null, true);
+      updateStatus('', false);
+    }
+  } catch (err) {
+    updateStatus(`Error: ${err.message}`, true);
+  } finally {
+    document.getElementById('generateBtn').disabled = false;
+  }
+}
+
+// Main generate function
+async function generate() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const promptText = document.getElementById('promptInput').value.trim();
+  const model = document.getElementById('modelSelect').value;
+  const aspectRatio = document.getElementById('aspectRatio').value;
+  const resolution = document.getElementById('resolution').value;
+  const numImages = parseInt(document.getElementById('numImages').value);
+
+  if (!apiKey) { alert('Please enter your fal.ai API key'); return; }
+  if (!uploadedFileData && !uploadedImageUrl) { alert('Please upload your headshot first'); return; }
+  if (!promptText) { alert('Please enter a prompt or select a preset'); return; }
+
+  const btn = document.getElementById('generateBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  clearDebugLog();
+
+  try {
+    // Upload image if needed
+    if (!uploadedImageUrl && uploadedFileData) {
+      uploadedImageUrl = await uploadToFal(uploadedFileData, apiKey);
+      debugLog('Upload', `Photo uploaded → ${uploadedImageUrl}`, 'success');
+    } else {
+      debugLog('Upload', `Using cached URL → ${uploadedImageUrl}`);
+    }
+
+    updateStatus('Submitting generation request...');
+
+    // Build payload based on model
+    let payload, endpoint = '', queueUrl;
+
+    if (model === 'fal-ai/hy-wu-edit') {
+      payload = {
+        prompt: promptText,
+        image_urls: [uploadedImageUrl],
+        num_images: numImages,
+        enable_thinking: true,
+        output_format: 'png'
+      };
+      queueUrl = `https://queue.fal.run/${model}`;
+    } else if (model === 'fal-ai/nano-banana-pro') {
+      // Use /edit endpoint — this EDITS your photo, preserving your face
+      endpoint = '/edit';
+      payload = {
+        prompt: promptText,
+        image_urls: [uploadedImageUrl],
+        num_images: numImages,
+        resolution: resolution,
+        output_format: 'png'
+      };
+      if (aspectRatio !== 'auto') payload.aspect_ratio = aspectRatio;
+      queueUrl = `https://queue.fal.run/${model}${endpoint}`;
+    } else {
+      // Nano Banana 2 — also use /edit endpoint so it uses the reference photo
+      endpoint = '/edit';
+      payload = {
+        prompt: promptText,
+        image_urls: [uploadedImageUrl],
+        num_images: numImages,
+        resolution: resolution,
+        output_format: 'png'
+      };
+      if (aspectRatio !== 'auto') payload.aspect_ratio = aspectRatio;
+      queueUrl = `https://queue.fal.run/${model}${endpoint}`;
+    }
+
+    debugLog('Model', model + endpoint);
+    debugLog('Prompt', promptText);
+    debugLog('Payload', JSON.stringify(payload, null, 2));
+    debugLog('URL', queueUrl);
+
+    const queueRes = await fetch(queueUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Key ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!queueRes.ok) {
+      const err = await queueRes.text();
+      debugLog('Error', `Submit failed (${queueRes.status}): ${err}`, 'error');
+      throw new Error(`Submit failed (${queueRes.status}): ${err}`);
+    }
+
+    const queue = await queueRes.json();
+    debugLog('Queue', `Request ID: ${queue.request_id}`, 'success');
+    updateStatus(`Queued! Generating your image...`);
+
+    // Poll
+    await pollStatus(queue.status_url, apiKey);
+    updateStatus('Downloading result...');
+
+    // Get result
+    const result = await getResult(queue.response_url, apiKey);
+    debugLog('Result', JSON.stringify(result, null, 2), 'success');
+
+    if (result.images && result.images.length > 0) {
+      result.images.forEach(img => {
+        addOutputCard(img.url, promptText, img.width, img.height);
+      });
+    }
+
+    updateStatus('', false);
+
+  } catch (err) {
+    updateStatus(`Error: ${err.message}`, true);
+    debugLog('Error', err.message, 'error');
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generate';
+  }
+}
+</script>
+
+</body>
+</html>
