@@ -97,8 +97,29 @@
   .animate-btn { padding: 6px 12px; background: linear-gradient(135deg, #7c3aed, #6366f1); border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; }
   .animate-btn:hover { opacity: 0.9; }
 
+  /* History Section */
+  .history-section { max-width: 1200px; margin: 0 auto; padding: 0 32px 48px; }
+  .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .history-header h2 { font-size: 18px; font-weight: 600; color: #fff; }
+  .history-header .history-count { font-size: 13px; color: #666; margin-left: 8px; }
+  .history-clear-btn { padding: 6px 14px; background: #222; border: 1px solid #333; border-radius: 6px; color: #888; font-size: 12px; cursor: pointer; }
+  .history-clear-btn:hover { border-color: #ef4444; color: #ef4444; }
+  .history-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+  .history-card { background: #1a1a1a; border-radius: 10px; border: 1px solid #2a2a2a; overflow: hidden; transition: all 0.2s; }
+  .history-card:hover { border-color: #4a6cf7; transform: translateY(-2px); }
+  .history-card img, .history-card video { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+  .history-card .history-meta { padding: 10px 14px; }
+  .history-card .history-scene { font-size: 13px; font-weight: 500; color: #4a6cf7; }
+  .history-card .history-date { font-size: 11px; color: #555; margin-top: 2px; }
+  .history-card .history-prompt { font-size: 11px; color: #666; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .history-card .history-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .history-card .history-actions a { padding: 4px 10px; background: #222; border: 1px solid #333; border-radius: 4px; color: #aaa; font-size: 11px; text-decoration: none; cursor: pointer; }
+  .history-card .history-actions a:hover { border-color: #4a6cf7; color: #fff; }
+  .history-empty { text-align: center; padding: 40px; color: #444; font-size: 14px; }
+
   @media (max-width: 800px) {
     .container { grid-template-columns: 1fr; }
+    .history-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
   }
 </style>
 </head>
@@ -228,11 +249,168 @@
   </div>
 </div>
 
+<!-- History Section -->
+<div class="history-section" id="historySection" style="display:none;">
+  <div class="history-header">
+    <h2>History <span class="history-count" id="historyCount"></span></h2>
+    <button class="history-clear-btn" onclick="clearHistory()">Clear All</button>
+  </div>
+  <div class="history-grid" id="historyGrid"></div>
+</div>
+
 <script>
 // State
 let uploadedImageUrl = null;
 let uploadedFileData = null;
 let outputs = [];
+
+// ── History ──────────────────────────────────────────
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem('headshot_history') || '[]'); }
+  catch { return []; }
+}
+
+function saveToHistory(entry) {
+  const history = getHistory();
+  history.unshift(entry);
+  // Keep last 100 entries
+  if (history.length > 100) history.length = 100;
+  localStorage.setItem('headshot_history', JSON.stringify(history));
+  renderHistory();
+}
+
+function clearHistory() {
+  if (!confirm('Clear all history? This cannot be undone.')) return;
+  localStorage.removeItem('headshot_history');
+  renderHistory();
+}
+
+function deleteHistoryItem(index) {
+  const history = getHistory();
+  history.splice(index, 1);
+  localStorage.setItem('headshot_history', JSON.stringify(history));
+  renderHistory();
+}
+
+function getActivePresetName() {
+  const active = document.querySelector('.preset-btn.active');
+  if (!active) return 'Custom';
+  const names = { ted: 'TED Talk', podcast: 'Podcast', linkedin: 'LinkedIn', conference: 'Conference', outdoor: 'Outdoor', studio: 'Studio', custom: 'Custom', video: 'Video Clip' };
+  return names[active.dataset.preset] || 'Custom';
+}
+
+function renderHistory() {
+  const history = getHistory();
+  const section = document.getElementById('historySection');
+  const grid = document.getElementById('historyGrid');
+  const count = document.getElementById('historyCount');
+
+  if (history.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  count.textContent = `(${history.length})`;
+
+  grid.innerHTML = history.map((item, i) => {
+    const date = new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const isVideo = item.isVideo || false;
+    const media = isVideo
+      ? `<video src="${item.url}" muted loop onmouseover="this.play()" onmouseout="this.pause();this.currentTime=0"></video>`
+      : `<img src="${item.url}" alt="${item.scene}" loading="lazy" onerror="this.parentElement.style.display='none'">`;
+    return `
+      <div class="history-card">
+        ${media}
+        <div class="history-meta">
+          <div class="history-scene">${item.scene || 'Custom'}</div>
+          <div class="history-date">${date}</div>
+          <div class="history-prompt">${item.prompt || ''}</div>
+          <div class="history-actions">
+            <a onclick="saveToHeadshots('${item.url}', '${(item.scene||'custom').replace(/'/g,"\\'")}', ${item.isVideo||false}).then(f => { if(f) { this.textContent='Saved!'; setTimeout(()=>this.textContent='Save',1500); } })">Save</a>
+            <a onclick="navigator.clipboard.writeText('${item.url}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy URL',1500)">Copy URL</a>
+            <a onclick="deleteHistoryItem(${i})" style="color:#ef4444">Delete</a>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Load history on page load
+renderHistory();
+
+// ── Save to Headshots folder ─────────────────────────
+let headshotsDirHandle = null;
+
+async function pickHeadshotsFolder() {
+  try {
+    headshotsDirHandle = await window.showDirectoryPicker({ id: 'headshots', startIn: 'downloads', mode: 'readwrite' });
+    return true;
+  } catch (e) {
+    if (e.name !== 'AbortError') console.error(e);
+    return false;
+  }
+}
+
+async function saveToHeadshots(url, scene, isVideo) {
+  // Build filename
+  const ext = isVideo ? 'mp4' : 'png';
+  const slug = (scene || 'custom').toLowerCase().replace(/\s+/g, '-');
+  const ts = new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-');
+  const filename = `${slug}-${ts}.${ext}`;
+
+  // Try File System Access API first
+  if ('showDirectoryPicker' in window) {
+    if (!headshotsDirHandle) {
+      const ok = await pickHeadshotsFolder();
+      if (!ok) return;
+    }
+
+    try {
+      // Verify we still have permission
+      const perm = await headshotsDirHandle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') {
+        const req = await headshotsDirHandle.requestPermission({ mode: 'readwrite' });
+        if (req !== 'granted') { headshotsDirHandle = null; return; }
+      }
+
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      const fileHandle = await headshotsDirHandle.getFile ?
+        await headshotsDirHandle.getFileHandle(filename, { create: true }) :
+        null;
+
+      if (fileHandle) {
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return filename;
+      }
+    } catch (e) {
+      console.error('Save failed, falling back to download:', e);
+      headshotsDirHandle = null;
+    }
+  }
+
+  // Fallback: regular download with suggested filename
+  try {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    return filename;
+  } catch (e) {
+    // Last resort: open in new tab
+    window.open(url, '_blank');
+    return null;
+  }
+}
 
 // Preset prompts
 // Nano Banana Pro /edit: prompts describe what to CHANGE about the uploaded photo
@@ -465,6 +643,18 @@ function addOutputCard(imageUrl, prompt, width, height, isVideo = false) {
   const empty = grid.querySelector('.empty-state');
   if (empty) empty.remove();
 
+  // Save to history
+  saveToHistory({
+    url: imageUrl,
+    prompt: prompt,
+    scene: getActivePresetName(),
+    model: document.getElementById('modelSelect').value,
+    width: width,
+    height: height,
+    isVideo: isVideo,
+    timestamp: Date.now()
+  });
+
   const card = document.createElement('div');
   card.className = 'output-card';
 
@@ -474,13 +664,14 @@ function addOutputCard(imageUrl, prompt, width, height, isVideo = false) {
 
   const dims = width && height ? `${width}x${height}` : '';
 
+  const sceneName = getActivePresetName();
   card.innerHTML = `
     ${media}
     <div class="output-info">
       <div class="output-label">${dims}</div>
       <div class="output-prompt">${prompt.substring(0, 120)}...</div>
       <div class="output-actions">
-        <a href="${imageUrl}" download target="_blank">Download</a>
+        <a onclick="saveToHeadshots('${imageUrl}', '${sceneName}', ${isVideo}).then(f => { if(f) { this.textContent='Saved!'; setTimeout(()=>this.textContent='Save',1500); } })">Save</a>
         <a onclick="navigator.clipboard.writeText('${imageUrl}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy URL',1500)">Copy URL</a>
         ${!isVideo ? `<button class="animate-btn" onclick="animateImage('${imageUrl}')">Animate to Video</button>` : ''}
       </div>
